@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CYBER MINES</title>
+<style>
+:root {
+  --bg-primary: #0a0a12;
+  --bg-secondary: #12121f;
+  --bg-cell: #1e1e35;
+  --bg-cell-hover: #282848;
+  --neon-cyan: #00f0ff;
+  --neon-magenta: #ff00aa;
+  --neon-green: #39ff14;
+  --neon-yellow: #ffe600;
+  --neon-orange: #ff6600;
+  --neon-red: #ff073a;
+  --text-primary: #e0e0f0;
+  --text-dim: #606080;
+  --cell-size: 28px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Courier New', monospace;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  overflow-x: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#app {
+  width: 100%;
+  max-width: 960px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+#hud {
+  display: none;
+  width: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid #2a2a40;
+  border-radius: 8px;
+  padding: 8px 16px;
+  margin-bottom: 8px;
+}
+#hud.active { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.hud-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.hud-btn {
+  background: var(--bg-cell); color: var(--neon-cyan); border: 1px solid #2a2a40;
+  padding: 6px 14px; font-family: inherit; font-size: 13px; cursor: pointer;
+  border-radius: 4px; transition: all .15s ease; text-transform: uppercase; letter-spacing: 1px;
+}
+.hud-btn:hover { background: #2a2a40; border-color: var(--neon-cyan); box-shadow: 0 0 8px rgba(0,240,255,.3); }
+.hud-btn.selected { background: #2a2a40; border-color: var(--neon-green); color: var(--neon-green); box-shadow: 0 0 10px rgba(57,255,20,.2); }
+.hud-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+.hud-value { font-size: 18px; font-weight: bold; min-width: 60px; text-align: center; }
+.hud-value.timer { color: var(--neon-cyan); text-shadow: 0 0 6px rgba(0,240,255,.5); }
+.hud-value.mines-left { color: var(--neon-magenta); text-shadow: 0 0 6px rgba(255,0,170,.5); font-size: 20px; }
+#combo-display {
+  position: fixed; top: 8px; right: 8px; padding: 4px 12px; border-radius: 4px;
+  background: var(--bg-secondary); border: 1px solid #2a2a40; font-size: 13px;
+  color: var(--neon-yellow); opacity: 0; transition: opacity .3s ease; pointer-events: none; z-index: 100;
+}
+#combo-display.visible { opacity: 1; }
+#adrenaline-container {
+  width: 120px; height: 8px; background: #1a1a2e; border-radius: 4px; overflow: hidden; border: 1px solid #2a2a40;
+}
+#adrenaline-bar {
+  height: 100%; width: 0%; border-radius: 4px; transition: width .3s ease, background .3s ease;
+  background: var(--neon-green);
+}
+#game-area-wrapper {
+  position: relative; overflow: auto; max-width: 100%; display: flex; justify-content: center;
+}
+#shake-container {
+  position: relative;
+  transition: transform .05s linear;
+  margin: 0 auto;
+}
+#board {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #2a2a40;
+  border: 1px solid #2a2a40;
+}
+.board-row {
+  display: flex;
+  gap: 1px;
+  background: transparent;
+  margin-bottom: 0;
+}
+.cell {
+  width: var(--cell-size);
+  height: var(--cell-size);
+  min-width: var(--cell-size);
+  min-height: var(--cell-size);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: bold; cursor: pointer;
+  background: var(--bg-cell); color: transparent;
+  border-radius: 2px; transition: background .1s ease, box-shadow .1s ease, transform .05s ease;
+  position: relative; overflow: hidden;
+  flex-shrink: 0;
+}
+.cell:hover:not(.revealed):not(.flagged) {
+  background: var(--bg-cell-hover);
+  box-shadow: inset 0 0 8px rgba(0,240,255,.15), 0 0 4px rgba(0,240,255,.1);
+}
+.cell.revealed { 
+  cursor: default; 
+  background: #141424; 
+  color: #ffffff; 
+}
+.cell.flagged::after { 
+  content: '🚩'; 
+  color: #ffffff;
+  display: block; 
+  width: var(--cell-size); 
+  height: var(--cell-size); 
+  font-size: 14px; 
+  line-height: var(--cell-size); 
+  text-align: center;
+}
+.cell.mine-exploded { 
+  background: #ff073a !important; 
+  box-shadow: 0 0 15px #ff073a;
+  z-index: 2;
+}
+.cell .num-1 { color: #00bfff; text-shadow: 0 0 6px rgba(0,191,255,.8); }
+.cell .num-2 { color: var(--neon-green); text-shadow: 0 0 6px rgba(57,255,20,.8); }
+.cell .num-3 { color: #ff4444; text-shadow: 0 0 6px rgba(255,68,68,.8); }
+.cell .num-4 { color: #9b59b6; text-shadow: 0 0 6px rgba(155,89,182,.8); }
+.cell .num-5 { color: var(--neon-orange); text-shadow: 0 0 6px rgba(255,102,0,.8); }
+.cell .num-6 { color: #00cccc; text-shadow: 0 0 6px rgba(0,204,204,.8); }
+.cell .num-7 { color: var(--neon-red); text-shadow: 0 0 6px rgba(255,7,58,.8); }
+.cell .num-8 { color: #ffffff; text-shadow: 0 0 6px rgba(255,255,255,.8); }
+#particle-canvas {
+  position: absolute; top: 0; left: 0; pointer-events: none; z-index: 10;
+}
+.float-score {
+  position: fixed; pointer-events: none; font-weight: bold; font-size: 14px;
+  color: var(--neon-yellow); text-shadow: 0 0 8px rgba(255,230,0,.7); z-index: 50;
+  animation: floatUp .8s ease-out forwards;
+}
+@keyframes floatUp {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-40px) scale(1.3); }
+}
+#screen-flash {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  pointer-events: none; z-index: 999; opacity: 0; transition: opacity .1s ease;
+}
+#menu-screen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 80vh; gap: 24px; text-align: center; padding: 20px;
+}
+#menu-screen h1 {
+  font-size: 36px; letter-spacing: 4px; color: var(--neon-cyan);
+  text-shadow: 0 0 20px rgba(0,240,255,.6), 0 0 40px rgba(0,240,255,.3);
+}
+#menu-screen .subtitle { color: var(--text-dim); font-size: 13px; letter-spacing: 2px; margin-top: -8px; }
+.menu-btn-group { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.menu-btn {
+  background: transparent; color: var(--neon-cyan); border: 1px solid #2a2a40; padding: 10px 28px;
+  font-family: inherit; font-size: 15px; cursor: pointer; border-radius: 6px; letter-spacing: 1px;
+  text-transform: uppercase; transition: all .2s ease;
+}
+.menu-btn:hover { background: var(--bg-cell); border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(0,240,255,.3); }
+#modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,.75); z-index: 200; align-items: center; justify-content: center;
+}
+#modal-overlay.active { display: flex; }
+.modal-card {
+  background: var(--bg-secondary); border: 1px solid #2a2a40; border-radius: 12px;
+  padding: 32px 48px; text-align: center; max-width: 400px; width: 90%;
+}
+.modal-card h2 { font-size: 24px; margin-bottom: 16px; letter-spacing: 2px; }
+.modal-card.win h2 { color: var(--neon-green); text-shadow: 0 0 15px rgba(57,255,20,.6); }
+.modal-card.lose h2 { color: var(--neon-red); text-shadow: 0 0 15px rgba(255,7,58,.6); }
+.stat-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1a1a2e; font-size: 14px; }
+.stat-label { color: var(--text-dim); }
+.stat-val { color: var(--neon-cyan); font-weight: bold; }
+.modal-actions { margin-top: 20px; display: flex; gap: 12px; justify-content: center; }
+#sound-toggle {
+  background: transparent; border: 1px solid #2a2a40; color: var(--text-dim); width: 36px; height: 36px;
+  font-size: 18px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+}
+#sound-toggle.on { color: var(--neon-green); border-color: var(--neon-green); }
+#scanlines {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 300;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.03) 2px, rgba(0,0,0,.03) 4px);
+}
+.shake { animation: shake .15s ease-in-out; }
+@keyframes shake {
+  0%   { transform: translate(0,0); }
+  20%  { transform: translate(-4px, 3px); }
+  40%  { transform: translate(3px, -4px); }
+  60%  { transform: translate(-3px, 2px); }
+  80%  { transform: translate(2px, -2px); }
+  100% { transform: translate(0,0); }
+}
+#confetti-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 250; }
+@media (max-width: 900px) {
+  :root { --cell-size: 24px; }
+}
+@media (max-width: 700px) {
+  :root { --cell-size: 20px; }
+  #hud { padding: 6px 10px; }
+  .hud-value { font-size: 14px; }
+  .hud-btn, .menu-btn { padding: 5px 10px; font-size: 11px; }
+}
+@media (max-width: 480px) {
+  :root { --cell-size: 17px; }
+}
+</style>
+</head>
+<body>
+<div id="scanlines"></div>
+<div id="screen-flash"></div>
+<canvas id="confetti-canvas"></canvas>
+<div id="app">
+  <div id="menu-screen">
+    <h1>CYBER MINES</h1>
+    <p class="subtitle">// ТАКТИЧЕСКИЙ САПЁР</p>
+    <br>
+    <p style="color:var(--text-dim);font-size:12px;max-width:460px;line-height:1.5;">
+      ЛКМ — открыть &nbsp;|&nbsp; ПКМ — флаг &nbsp;
+    </p>
+    <br><div class="menu-btn-group">
+      <button class="menu-btn" data-diff="easy">Новичок</button>
+      <button class="menu-btn" data-diff="medium">Опытный</button>
+      <button class="menu-btn" data-diff="hard">Эксперт</button>
+    </div>
+  </div>
+  <div id="hud">
+    <div class="hud-row">
+      <span class="hud-label">Дифф:</span>
+      <button class="hud-btn selected" data-diff="easy">Новичок</button>
+      <button class="hud-btn" data-diff="medium">Опытный</button>
+      <button class="hud-btn" data-diff="hard">Эксперт</button>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Мины:</span>
+      <span class="hud-value mines-left" id="mines-count">10</span>
+      <span style="margin: 0 6px;">|</span>
+      <span class="hud-label">Время:</span>
+      <span class="hud-value timer" id="timer-display">00:00</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Очки:</span>
+      <span class="hud-value" id="score-display" style="color:var(--neon-yellow);font-size:16px;">0</span>
+      <span style="margin: 0 6px;">|</span>
+      <div id="adrenaline-container"><div id="adrenaline-bar"></div></div>
+      <button id="sound-toggle" title="Звук вкл/выкл">🔊</button>
+      <button class="hud-btn" id="restart-btn" style="border-color:var(--neon-red);color:var(--neon-red);">⟳</button>
+    </div>
+  </div>
+  <div id="game-area-wrapper" style="display:none;">
+    <div id="shake-container">
+      <div id="board"></div>
+      <canvas id="particle-canvas"></canvas>
+    </div>
+  </div>
+</div>
+<div id="combo-display">COMBO x1</div>
+<div id="modal-overlay">
+  <div class="modal-card" id="modal-card">
+    <h2 id="modal-title"></h2>
+    <div id="modal-stats"></div>
+    <div class="modal-actions">
+      <button class="menu-btn" id="modal-restart">Заново</button>
+      <button class="menu-btn" id="modal-menu">Меню</button>
+    </div>
+  </div>
+</div>
+<script>
+const DIFFICULTIES = {
+  easy:   { rows: 9,  cols: 9,  mines: 10 },
+  medium: { rows: 16, cols: 16, mines: 40 },
+  hard:   { rows: 16, cols: 30, mines: 99 }
+};
+const STATE = { MENU: 0, PLAYING: 1, GAMEOVER: 2, WIN: 3 };
+let gameState = STATE.MENU;
+let difficulty = 'easy';
+let config = DIFFICULTIES[difficulty];
+let grid = [];
+let revealed = [];
+let flagged = [];
+let firstClick = true;
+let gameTime = 0;
+let gameTimerInterval = null;
+let score = 0;
+let comboMultiplier = 1;
+let adrenalineValue = 0;
+let lastRevealTime = 0;
+let maxCombo = 1;
+const COMBO_WINDOW = 1500;
+let lastTouchTime = 0;
+let boardGen = 0;
+let soundEnabled = true;
+const $menuScreen       = document.getElementById('menu-screen');
+const $hud              = document.getElementById('hud');
+const $gameArea         = document.getElementById('game-area-wrapper');
+const $board            = document.getElementById('board');
+const $particleCanvas   = document.getElementById('particle-canvas');
+const pCtx              = $particleCanvas.getContext('2d');
+const $shakeContainer   = document.getElementById('shake-container');
+const $minesCount       = document.getElementById('mines-count');
+const $timerDisplay     = document.getElementById('timer-display');
+const $scoreDisplay     = document.getElementById('score-display');
+const $adrenalineBar    = document.getElementById('adrenaline-bar');
+const $comboDisplay     = document.getElementById('combo-display');
+const $screenFlash      = document.getElementById('screen-flash');
+const $modalOverlay     = document.getElementById('modal-overlay');
+const $modalCard        = document.getElementById('modal-card');
+const $modalTitle       = document.getElementById('modal-title');
+const $modalStats       = document.getElementById('modal-stats');
+const $confettiCanvas   = document.getElementById('confetti-canvas');
+const confCtx           = $confettiCanvas.getContext('2d');
+let audioCtx = null;
+let masterGain = null;
+let delayNode = null;
+let delayGain = null;
+let lowPassFilter = null;
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.35;
+    masterGain.connect(audioCtx.destination);
+    lowPassFilter = audioCtx.createBiquadFilter();
+    lowPassFilter.type = 'lowpass';
+    lowPassFilter.frequency.value = 2800;
+    lowPassFilter.Q.value = 0.7;
+    lowPassFilter.connect(masterGain);
+    delayNode = audioCtx.createDelay(1.0);
+    delayNode.delayTime.value = 0.25;
+    delayGain = audioCtx.createGain();
+    delayGain.gain.value = 0.18;
+    delayNode.connect(delayGain);
+    delayGain.connect(masterGain);
+    delayGain.connect(delayNode);
+  }
+}
+function playGalaxyTone(freq, duration, type='sine', vol=0.12) {
+  if (!soundEnabled || !audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const now = audioCtx.currentTime;
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    if (type === 'sine') {
+      osc.frequency.exponentialRampToValueAtTime(Math.min(freq * 1.05, 20000), now + duration * 0.3);
+    }
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(vol, now + 0.04); // attack
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration); // decay
+    osc.connect(gain);
+    gain.connect(lowPassFilter);
+    gain.connect(delayNode);
+    gain.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + duration + 0.1);
+  } catch(e) {}
+}
+function playGalaxyNoise(duration, vol=0.08) {
+  if (!soundEnabled || !audioCtx) return;
+  try {
+    const bufferSize = audioCtx.sampleRate * duration;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * vol;
+    }
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1200, audioCtx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + duration);
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(vol * 1.5, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    source.connect(filter);
+    filter.connect(delayNode);
+    filter.connect(masterGain);
+    source.start();
+  } catch(e) {}
+}
+function playGalaxyChord(freqs, duration, type='sine', vol=0.06) {
+  freqs.forEach(f => playGalaxyTone(f, duration, type, vol));
+}
+function sndClick() {
+  playGalaxyTone(1200, 0.04, 'sine', 0.08);
+}
+function sndReveal(val) {
+  if (val === 0) {
+    playGalaxyChord([523, 659, 784], 0.15, 'sine', 0.05);
+  } else {
+    const baseFreq = [0, 440, 494, 523, 587, 659, 698, 784, 880];
+    playGalaxyTone(baseFreq[val] || 440, 0.1, 'triangle', 0.06);
+  }
+}
+function sndFlag() {
+  playGalaxyTone(988, 0.08, 'square', 0.05);
+  setTimeout(() => playGalaxyTone(1318, 0.06, 'sine', 0.04), 60);
+}
+function sndExplosion() {
+  playGalaxyNoise(0.5, 0.12);
+  setTimeout(() => playGalaxyTone(80, 0.4, 'sawtooth', 0.06), 50);
+  setTimeout(() => playGalaxyChord([220, 277, 330], 0.3, 'sine', 0.04), 100);
+}
+function sndChordReveal() {
+  playGalaxyChord([659, 784, 988], 0.08, 'sine', 0.04);
+}
+function sndWinFanfare() {
+  const melody = [523, 659, 784, 1047, 1318];
+  melody.forEach((n, i) => {
+    setTimeout(() => playGalaxyTone(n, 0.4, 'sine', 0.07), i * 180);
+  });
+  setTimeout(() => playGalaxyChord([130, 165], 1.2, 'triangle', 0.04), 0);
+}
+function sndLose() {
+  playGalaxyTone(330, 0.6, 'sawtooth', 0.08);
+  setTimeout(() => playGalaxyTone(261, 0.5, 'triangle', 0.07), 150);
+  setTimeout(() => playGalaxyNoise(0.4, 0.1), 300);
+}
+const MAX_PARTICLES = 300;
+let particles = [];
+function initParticles() {
+  for (let i = 0; i < MAX_PARTICLES; i++) {
+    particles.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 1, color: '#fff', size: 2 });
+  }
+}
+function spawnParticles(x, y, count, color, speed=3, size=2) {
+  for (let p of particles) {
+    if (!p.active && count > 0) {
+      const angle = Math.random() * Math.PI * 2;
+      const spd = speed * (0.5 + Math.random());
+      p.active = true;
+      p.x = x; p.y = y;
+      p.vx = Math.cos(angle) * spd;
+      p.vy = Math.sin(angle) * spd;
+      p.life = 1;
+      p.maxLife = 0.4 + Math.random() * 0.4;
+      p.color = color;
+      p.size = size * (0.5 + Math.random());
+      count--;
+    }
+  }
+}
+function updateParticles(dt) {
+  for (let p of particles) {
+    if (!p.active) continue;
+    p.life -= dt / p.maxLife;
+    if (p.life <= 0) { p.active = false; continue; }
+    p.x += p.vx * dt * 60;
+    p.y += p.vy * dt * 60;
+    p.vy += 0.15 * dt * 60;
+  }
+}
+function drawParticles(ctx) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  for (let p of particles) {
+    if (!p.active) continue;
+    const alpha = Math.max(0, p.life);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+const MAX_CONFETTI = 250;
+let confettiParticles = [];
+let confettiRunning = false;
+function spawnConfetti() {
+  confettiParticles = [];
+  confettiRunning = true;
+  for (let i = 0; i < MAX_CONFETTI; i++) {
+    confettiParticles.push({
+      x: Math.random() * $confettiCanvas.clientWidth,
+      y: -20 - Math.random() * 300,
+      vx: (Math.random() - 0.5) * 6,
+      vy: 1 + Math.random() * 4,
+      rot: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.3,
+      w: 4 + Math.random() * 8,
+      h: 3 + Math.random() * 6,
+      color: ['#00f0ff','#ff00aa','#39ff14','#ffe600','#ff6600','#ffffff'][Math.floor(Math.random()*6)],
+      life: 2 + Math.random() * 3
+    });
+  }
+}
+function updateConfetti(dt) {
+  if (!confettiRunning) return;
+  for (let c of confettiParticles) {
+    c.x += c.vx;
+    c.y += c.vy;
+    c.rot += c.rotSpeed;
+    c.life -= dt;
+    c.vy += 0.08;
+  }
+  confettiRunning = confettiParticles.some(c => c.life > 0);
+}
+function drawConfetti(ctx) {
+  ctx.clearRect(0, 0, $confettiCanvas.width, $confettiCanvas.height);
+  for (let c of confettiParticles) {
+    if (c.life <= 0) continue;
+    ctx.save();
+    ctx.translate(c.x * (ctx.canvas.width / $confettiCanvas.clientWidth), c.y * (ctx.canvas.height / $confettiCanvas.clientHeight));
+    ctx.rotate(c.rot);
+    ctx.globalAlpha = Math.min(1, c.life);
+    ctx.fillStyle = c.color;
+    ctx.fillRect(-c.w/2, -c.h/2, c.w, c.h);
+    ctx.restore();
+  }
+}
+function initGrid() {
+  const rows = config.rows;
+  const cols = config.cols;
+  grid = [];
+  revealed = [];
+  flagged = [];
+  for (let r = 0; r < rows; r++) {
+    grid[r] = new Array(cols).fill(0);
+    revealed[r] = new Array(cols).fill(false);
+    flagged[r] = new Array(cols).fill(false);
+  }
+}
+function getNeighbors(r, c) {
+  const neighbors = [];
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < config.rows && nc >= 0 && nc < config.cols) {
+        neighbors.push({r: nr, c: nc});
+      }
+    }
+  }
+  return neighbors;
+}
+function generateMines(safeR, safeC) {
+  const rows = config.rows, cols = config.cols;
+  const safeSet = new Set();
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      const nr = safeR + dr, nc = safeC + dc;
+      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+        safeSet.add(nr * cols + nc);
+      }
+    }
+  }
+  let placed = 0;
+  while (placed < config.mines) {
+    const r = Math.floor(Math.random() * rows);
+    const c = Math.floor(Math.random() * cols);
+    if (grid[r][c] === -1) continue;
+    if (safeSet.has(r * cols + c)) continue;
+    grid[r][c] = -1; // мина
+    placed++;
+  }
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] === -1) continue;
+      let count = 0;
+      for (const n of getNeighbors(r, c)) {
+        if (grid[n.r][n.c] === -1) count++;
+      }
+      grid[r][c] = count;
+    }
+  }
+}
+function cellCenter(el) {
+  const b = $board.getBoundingClientRect();
+  const e = el.getBoundingClientRect();
+  return { x: e.left - b.left + e.width / 2, y: e.top - b.top + e.height / 2 };
+}
+function scheduleRender(r, c, delay) {
+  const gen = boardGen;
+  setTimeout(() => {
+    if (gen !== boardGen) return;
+    renderCell(r, c);
+    const el = getCellElement(r, c);
+    if (el) {
+      const p = cellCenter(el);
+      spawnParticles(p.x, p.y, grid[r][c] === 0 ? 4 : 2, '#00f0ff', 1.5, 1.5);
+    }
+  }, delay);
+}
+function openCells(starts) {
+  const opened = [];
+  let frontier = [];
+  for (const s of starts) {
+    if (revealed[s.r][s.c] || flagged[s.r][s.c] || grid[s.r][s.c] === -1) continue;
+    revealed[s.r][s.c] = true;
+    opened.push({ r: s.r, c: s.c, step: 0 });
+    frontier.push(s);
+  }
+  if (opened.length === 0) return 0;
+  let step = 0;
+  while (frontier.length) {
+    step++;
+    const next = [];
+    for (const cur of frontier) {
+      if (grid[cur.r][cur.c] !== 0) continue; // расширяемся только из пустых
+      for (const n of getNeighbors(cur.r, cur.c)) {
+        if (revealed[n.r][n.c] || flagged[n.r][n.c]) continue;
+        revealed[n.r][n.c] = true;
+        opened.push({ r: n.r, c: n.c, step });
+        next.push(n);
+      }
+    }
+    frontier = next;
+  }
+  updateCombo();
+  const gained = opened.length * 10 * comboMultiplier;
+  score += gained;
+  $scoreDisplay.textContent = score;
+  opened.forEach(o => scheduleRender(o.r, o.c, Math.min(o.step, 40) * 20));
+  const first = opened[0];
+  sndReveal(opened.length > 1 ? 0 : grid[first.r][first.c]);
+  const firstEl = getCellElement(first.r, first.c);
+  if (firstEl) showFloatingScore(firstEl, `+${gained}`);
+  return opened.length;
+}
+function revealCell(r, c) {
+  if (revealed[r][c] || flagged[r][c]) return null;
+  if (grid[r][c] === -1) return 'mine';
+  openCells([{ r, c }]);
+  checkWin();
+  return 'safe';
+}
+function chording(r, c) {
+  if (!revealed[r][c] || grid[r][c] <= 0) return null;
+  const around = getNeighbors(r, c);
+  const flagCount = around.filter(n => flagged[n.r][n.c]).length;
+  if (flagCount !== grid[r][c]) return null;
+  const targets = around.filter(n => !revealed[n.r][n.c] && !flagged[n.r][n.c]);
+  const hit = targets.find(n => grid[n.r][n.c] === -1);
+  if (hit) return hit;
+  if (targets.length) {
+    sndChordReveal();
+    openCells(targets);
+    checkWin();
+  }
+  return null;
+}
+function loseGame(r, c) {
+  if (gameState !== STATE.PLAYING) return;
+  gameState = STATE.GAMEOVER;
+  stopGameTimer();
+  const gen = boardGen;
+  const cellEl = getCellElement(r, c);
+  revealed[r][c] = true;
+  if (cellEl) {
+    cellEl.classList.add('mine-exploded');
+    renderCell(r, c); // 💥
+    const p = cellCenter(cellEl);
+    spawnParticles(p.x, p.y, 30, '#ff4444', 5, 3);
+  }
+  sndExplosion();
+  $screenFlash.style.background = 'rgba(255,20,20,0.6)';
+  $screenFlash.style.opacity = '1';
+  setTimeout(() => { $screenFlash.style.opacity = '0'; }, 150);
+  $shakeContainer.classList.add('shake');
+  setTimeout(() => $shakeContainer.classList.remove('shake'), 200);
+  const mines = [];
+  for (let rr = 0; rr < config.rows; rr++) {
+    for (let cc = 0; cc < config.cols; cc++) {
+      if (grid[rr][cc] === -1 && !revealed[rr][cc] && !flagged[rr][cc]) mines.push({ r: rr, c: cc });
+    }
+  }
+  const delay = Math.min(60, 1500 / Math.max(1, mines.length));
+  showAllMines(mines, 0, gen, delay);
+  setTimeout(() => { if (gen === boardGen) sndLose(); }, 300);
+  setTimeout(() => { if (gen === boardGen) showModal(false); }, 2000);
+}
+function showAllMines(mines, i, gen, delay) {
+  if (gen !== boardGen || i >= mines.length) return;
+  const m = mines[i];
+  revealed[m.r][m.c] = true;
+  renderCell(m.r, m.c);
+  const el = getCellElement(m.r, m.c);
+  if (el) {
+    el.classList.add('mine-exploded');
+    const p = cellCenter(el);
+    spawnParticles(p.x, p.y, 12, '#ff6600', 4, 2.5);
+  }
+  setTimeout(() => showAllMines(mines, i + 1, gen, delay), delay);
+}
+function getCellElement(r, c) {
+  const rowEl = $board.querySelector(`.board-row[data-r="${r}"]`);
+  if (!rowEl) return null;
+  return rowEl.querySelector(`[data-c="${c}"]`) || rowEl.children[c];
+}
+function renderCell(r, c) {
+  const cell = getCellElement(r, c);
+  if (!cell) return;
+  cell.classList.add('revealed');
+  for (let i = 1; i <= 8; i++) cell.classList.remove(`num-${i}`);
+  const val = grid[r][c];
+  const wasFlagged = cell.classList.contains('flagged');
+  cell.innerHTML = '';
+  if (wasFlagged) {
+    cell.classList.add('flagged');
+  }
+ if (val === -1) {
+    const isExploded = cell.classList.contains('mine-exploded');
+    cell.textContent = isExploded ? '💥' : '💣';
+    cell.style.fontSize = '15px';
+  } else if (val > 0 && !cell.classList.contains('mine-exploded')) {
+    const span = document.createElement('span');
+    span.className = `num-${val}`;
+    span.textContent = val;
+    cell.appendChild(span);
+  }
+}
+function renderBoard() {
+  $board.innerHTML = '';
+  const rows = config.rows, cols = config.cols;
+  for (let r = 0; r < rows; r++) {
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'board-row';
+    rowDiv.style.display = 'flex';
+    rowDiv.style.flexDirection = 'row';
+    rowDiv.style.gap = '1px';
+    rowDiv.style.background = '#2a2a40';
+    rowDiv.dataset.r = r;
+    for (let c = 0; c < cols; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r;
+      cell.dataset.c = c;
+      cell.addEventListener('mousedown', onCellMouseDown);
+      cell.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const rr = parseInt(this.dataset.r);
+        const cc = parseInt(this.dataset.c);
+        if (gameState === STATE.PLAYING && !revealed[rr][cc]) {
+          placeFlag(rr, cc);
+          sndFlag();
+        }
+      });
+      let touchTimer = null;
+      cell.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        lastTouchTime = Date.now();
+        initAudio();
+        const rr = parseInt(this.dataset.r);
+        const cc = parseInt(this.dataset.c);
+        if (gameState !== STATE.PLAYING) return;
+        touchTimer = setTimeout(() => {
+          placeFlag(rr, cc);
+          sndFlag();
+          touchTimer = null;
+        }, 350);
+      }, {passive: false});
+      cell.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        lastTouchTime = Date.now();
+        if (touchTimer) {
+          clearTimeout(touchTimer);
+          touchTimer = null;
+          const rr = parseInt(this.dataset.r);
+          const cc = parseInt(this.dataset.c);
+          handleCellClick(rr, cc, false);
+        }
+      }, {passive: false});
+      cell.addEventListener('touchmove', function(e) {
+        if (touchTimer) {
+          clearTimeout(touchTimer);
+          touchTimer = null;
+        }
+      }, {passive: true});
+      rowDiv.appendChild(cell);
+    }
+    $board.appendChild(rowDiv);
+  }
+  resizeParticleCanvas();
+}
+function resizeParticleCanvas() {
+  const boardRect = $board.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  $particleCanvas.style.width = boardRect.width + 'px';
+  $particleCanvas.style.height = boardRect.height + 'px';
+  $particleCanvas.width = boardRect.width * dpr;
+  $particleCanvas.height = boardRect.height * dpr;
+  pCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  confCtx.canvas.style.width = '100vw';
+  confCtx.canvas.style.height = '100vh';
+  confCtx.canvas.width = window.innerWidth * (window.devicePixelRatio || 1);
+  confCtx.canvas.height = window.innerHeight * (window.devicePixelRatio || 1);
+}
+function onCellMouseDown(e) {
+  e.preventDefault();
+  if (Date.now() - lastTouchTime < 700) return;
+  initAudio();
+  const r = parseInt(this.dataset.r);
+  const c = parseInt(this.dataset.c);
+  if (gameState !== STATE.PLAYING) return;
+  if (e.button === 0) {
+    handleCellClick(r, c, false);
+  } else if (e.button === 1) {
+    handleCellClick(r, c, true);
+  }
+}
+function handleCellClick(r, c, isChord) {
+  if (gameState !== STATE.PLAYING) return;
+  if (revealed[r][c]) {
+    const hit = chording(r, c);
+    if (hit) loseGame(hit.r, hit.c);
+    return;
+  }
+  if (isChord || flagged[r][c]) return; // средняя кнопка работает только как chording
+  if (firstClick) {
+    firstClick = false;
+    generateMines(r, c);
+    startGameTimer();
+  }
+  if (revealCell(r, c) === 'mine') loseGame(r, c);
+}
+function placeFlag(r, c) {
+  if (revealed[r][c]) return;
+  if (flagged[r][c]) {
+    flagged[r][c] = false;
+    const cellEl = getCellElement(r, c);
+    if (cellEl) {
+      cellEl.classList.remove('flagged');
+      cellEl.textContent = '';
+    }
+    updateMineCount();
+  } else {
+    flagged[r][c] = true;
+    const cellEl = getCellElement(r, c);
+    if (cellEl) {
+      cellEl.classList.add('flagged');
+      cellEl.textContent = '';
+    }
+    updateMineCount();
+  }
+}
+function updateMineCount() {
+  let flagCount = 0;
+  for (let r = 0; r < config.rows; r++) {
+    for (let c = 0; c < config.cols; c++) {
+      if (flagged[r][c]) flagCount++;
+    }
+  }
+  const remaining = config.mines - flagCount;
+  $minesCount.textContent = remaining;
+  if (remaining <= 0) {
+    $minesCount.style.color = 'var(--neon-red)';
+  } else {
+    $minesCount.style.color = '';
+  }
+}
+function updateCombo() {
+  const now = Date.now();
+  if (now - lastRevealTime < COMBO_WINDOW) {
+    comboMultiplier = Math.min(comboMultiplier + 1, 5);
+  } else {
+    comboMultiplier = 1;
+  }
+  lastRevealTime = now;
+  maxCombo = Math.max(maxCombo, comboMultiplier);
+  adrenalineValue = Math.min(adrenalineValue + 3 * comboMultiplier, 100);
+  $adrenalineBar.style.width = adrenalineValue + '%';
+  if (comboMultiplier > 1) {
+    const colors = ['', '#39ff14', '#ffe600', '#ff6600', '#ff073a', '#ff00aa'];
+    $adrenalineBar.style.background = colors[comboMultiplier] || 'var(--neon-green)';
+    $comboDisplay.textContent = `COMBO x${comboMultiplier}`;
+    $comboDisplay.style.color = colors[comboMultiplier];
+    $comboDisplay.classList.add('visible');
+  } else {
+    $comboDisplay.classList.remove('visible');
+  }
+}
+function showFloatingScore(cellEl, text) {
+  const rect = cellEl.getBoundingClientRect();
+  const floatEl = document.createElement('div');
+  floatEl.className = 'float-score';
+  floatEl.textContent = text;
+  floatEl.style.left = (rect.left + rect.width / 2 - 15) + 'px';
+  floatEl.style.top = (rect.top - 10) + 'px';
+  document.body.appendChild(floatEl);
+  setTimeout(() => floatEl.remove(), 900);
+}
+function checkWin() {
+  if (gameState !== STATE.PLAYING) return;
+  let unrevealedSafe = 0;
+  for (let r = 0; r < config.rows; r++) {
+    for (let c = 0; c < config.cols; c++) {
+      if (!revealed[r][c] && grid[r][c] !== -1) unrevealedSafe++;
+    }
+  }
+  if (unrevealedSafe === 0) {
+    gameState = STATE.WIN;
+    stopGameTimer();
+    const timeBonus = Math.max(0, 300 - gameTime) * 5;
+    score += timeBonus + config.mines * 20;
+    $scoreDisplay.textContent = score;
+    for (let r = 0; r < config.rows; r++) {
+      for (let c = 0; c < config.cols; c++) {
+        if (grid[r][c] === -1 && !flagged[r][c]) {
+          flagged[r][c] = true;
+          const cellEl = getCellElement(r, c);
+          if (cellEl) {
+            cellEl.classList.add('flagged');
+            cellEl.textContent = '';
+          }
+        }
+      }
+    }
+    updateMineCount();
+    sndWinFanfare();
+    spawnConfetti();
+    const gen = boardGen;
+    setTimeout(() => { if (gen === boardGen) showModal(true); }, 800);
+  }
+}
+function startGameTimer() {
+  if (gameTimerInterval) clearInterval(gameTimerInterval);
+  gameTimerInterval = setInterval(() => {
+    gameTime++;
+    const min = String(Math.floor(gameTime / 60)).padStart(2, '0');
+    const sec = String(gameTime % 60).padStart(2, '0');
+    $timerDisplay.textContent = `${min}:${sec}`;
+    if (gameTime > 300) {
+      $timerDisplay.style.color = '#ff073a';
+    } else {
+      $timerDisplay.style.color = '';
+    }
+  }, 1000);
+}
+function stopGameTimer() {
+  if (gameTimerInterval) { clearInterval(gameTimerInterval); gameTimerInterval = null; }
+}
+function showModal(isWin) {
+  $modalCard.className = 'modal-card ' + (isWin ? 'win' : 'lose');
+  $modalTitle.textContent = isWin ? '✓ МИССИЯ ВЫПОЛНЕНА' : '✗ ВЗРЫВ';
+  const min = String(Math.floor(gameTime / 60)).padStart(2, '0');
+  const sec = String(gameTime % 60).padStart(2, '0');
+  $modalStats.innerHTML = `
+    <div class="stat-row"><span class="stat-label">Время</span><span class="stat-val">${min}:${sec}</span></div>
+    <div class="stat-row"><span class="stat-label">Очки</span><span class="stat-val">${score}</span></div>
+    <div class="stat-row"><span class="stat-label">Макс. комбо</span><span class="stat-val">x${maxCombo}</span></div>
+    <div class="stat-row"><span class="stat-label">Сложность</span><span class="stat-val">${getDiffName()}</span></div>
+  `;
+  $modalOverlay.classList.add('active');
+}
+function getDiffName() {
+  return {easy:'Новичок', medium:'Опытный', hard:'Эксперт'}[difficulty] || difficulty;
+}
+function startGame(diff) {
+  initAudio();
+  difficulty = diff;
+  config = DIFFICULTIES[diff];
+  gameState = STATE.PLAYING;
+  firstClick = true;
+  gameTime = 0;
+  score = 0;
+  comboMultiplier = 1;
+  adrenalineValue = 0;
+  lastRevealTime = 0;
+  maxCombo = 1;
+  boardGen++;
+  $timerDisplay.textContent = '00:00';
+  $scoreDisplay.textContent = '0';
+  $adrenalineBar.style.width = '0%';
+  $minesCount.textContent = config.mines;
+  $modalOverlay.classList.remove('active');
+  document.querySelectorAll('.hud-btn[data-diff], .menu-btn[data-diff]').forEach(b => {
+    b.classList.toggle('selected', b.dataset.diff === diff);
+  });
+  $menuScreen.style.display = 'none';
+  $hud.classList.add('active');
+  $gameArea.style.display = '';
+  initGrid();
+  renderBoard();
+}
+function restartGame() {
+  stopGameTimer();
+  confettiRunning = false;
+  startGame(difficulty);
+}
+let lastFrameTime = 0;
+function gameLoop(timestamp) {
+  const dt = Math.min((timestamp - lastFrameTime) / 1000, 0.1);
+  lastFrameTime = timestamp;
+  if (gameState !== STATE.MENU) {
+    updateParticles(dt);
+    drawParticles(pCtx);
+  }
+  if (gameState === STATE.PLAYING) {
+    adrenalineValue = Math.max(0, adrenalineValue - 2 * dt);
+    $adrenalineBar.style.width = adrenalineValue + '%';
+    if (comboMultiplier > 1 &&
+        (adrenalineValue <= 0 || Date.now() - lastRevealTime > COMBO_WINDOW)) {
+      comboMultiplier = 1;
+      $comboDisplay.classList.remove('visible');
+      $adrenalineBar.style.background = 'var(--neon-green)';
+    }
+  }
+  if (confettiRunning) {
+    updateConfetti(dt);
+    drawConfetti(confCtx);
+  } else {
+    confCtx.clearRect(0, 0, $confettiCanvas.width, $confettiCanvas.height);
+  }
+  requestAnimationFrame(gameLoop);
+}
+document.querySelectorAll('.menu-btn[data-diff], #hud .hud-btn[data-diff]').forEach(btn => {
+  btn.addEventListener('click', () => startGame(btn.dataset.diff));
+});
+document.getElementById('restart-btn').addEventListener('click', restartGame);
+document.getElementById('modal-restart').addEventListener('click', restartGame);
+document.getElementById('modal-menu').addEventListener('click', () => {
+  $modalOverlay.classList.remove('active');
+  stopGameTimer();
+  boardGen++;
+  confettiRunning = false;
+  gameState = STATE.MENU;
+  $hud.classList.remove('active');
+  $gameArea.style.display = 'none';
+  $menuScreen.style.display = '';
+  confettiParticles = [];
+  confCtx.clearRect(0, 0, $confettiCanvas.width, $confettiCanvas.height);
+});
+document.getElementById('sound-toggle').addEventListener('click', function() {
+  soundEnabled = !soundEnabled;
+  this.textContent = soundEnabled ? '🔊' : '🔇';
+  this.classList.toggle('on', soundEnabled);
+  if (soundEnabled) initAudio();
+});
+window.addEventListener('resize', () => {
+  resizeParticleCanvas();
+});
+$board.addEventListener('contextmenu', e => e.preventDefault());
+initParticles();
+(function initCanvases() {
+  const dpr = window.devicePixelRatio || 1;
+  $confettiCanvas.width = window.innerWidth * dpr;
+  $confettiCanvas.height = window.innerHeight * dpr;
+  confCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  $particleCanvas.style.position = 'absolute';
+})();
+requestAnimationFrame(gameLoop);
+console.log('%c CYBER-MINESWEEPER loaded ', 'background:#0a0a12;color:#00f0ff;font-size:14px;padding:4px;border-radius:4px;');
+</script>
+</body>
+</html>
